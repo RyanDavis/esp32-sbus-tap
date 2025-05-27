@@ -1,6 +1,6 @@
 # ESP32-C3 SBUS Capture
 
-A high-performance SBUS protocol capture and retransmission tool for ESP32-C3 microcontrollers. This project reads SBUS data from RC receivers, outputs structured JSON data via USB serial, and retransmits the SBUS signal for passthrough applications.
+A high-performance SBUS protocol capture and retransmission tool for ESP32-C3 microcontrollers. This project reads SBUS data from RC receivers, outputs structured JSON data via USB serial, and retransmits the SBUS signal for passthrough applications.  Override commands are available to set SBUS channel outputs.  Overriden outputs expire after 2 seconds.
 
 ## Features
 
@@ -75,30 +75,48 @@ SBUS Receiver    ESP32-C3
 
 The device outputs JSON messages via USB serial at 115200 baud:
 
-#### Channel Data Messages
+#### Channel Status Messages
 ```json
 {
-  "type": "channels",
-  "timestamp": 12345,
-  "channels": [992, 1024, 856, 1200, 992, 992, 992, 992, 992, 992, 992, 992, 992, 992, 992, 992],
-  "frameLost": false,
-  "failsafe": false
+  "type":"channels",
+  "timestamp":260838,
+  "input_channels":[1002,1002,1002,1002,1002,1002,1002,1002,685,282,282,693,1002,1002,1002,1002],
+  "output_channels":[1002,1002,1002,1002,1002,1002,1002,1002,685,282,282,693,1002,1002,1002,1002],
+  "overrides":[],
+  "frameLost":false,
+  "failsafe":false
+}
+{
+  "type":"channels",
+  "timestamp":254723,
+  "input_channels":[1002,1002,1002,1002,1002,1002,1002,1002,685,282,282,693,1002,1002,1002,1002],
+  "output_channels":[1002,1002,1500,1002,1002,1002,1002,1002,685,282,282,693,1002,1002,1002,1002],
+  "overrides":[3],
+  "frameLost":false,
+  "failsafe":false
 }
 ```
 
 **Fields:**
 - `type` - Always "channels" for channel data
 - `timestamp` - Milliseconds since ESP32 startup
-- `channels` - Array of 16 channel values (0-2047, typical range 172-1811)
+- `input_channels` - Array of 16 channel values (0-2047, typical range 172-1811)
+- `output_channels` - Array of 16 channel values (0-2047, typical range 172-1811)
+- `overrides` - Array of overridden channel outputs
 - `frameLost` - Boolean indicating receiver detected frame loss
 - `failsafe` - Boolean indicating receiver is in failsafe mode
 
 #### Status Messages
 ```json
 {
-  "type": "status", 
-  "timestamp": 12345,
-  "connected": false
+  "type":"status",
+  "timestamp":470274,
+  "connected":false
+}
+{
+  "type":"status",
+  "timestamp":506151,
+  "connected":true
 }
 ```
 
@@ -111,6 +129,145 @@ The device outputs JSON messages via USB serial at 115200 baud:
 - `"connected": false` sent immediately when signal lost
 - `"connected": false` repeated every 5 seconds while disconnected
 - `"connected": true` sent when signal restored
+
+#### JSON Commands
+
+**Set Channel Override**
+```json
+{
+  "command": "set_channel", 
+  "channel": 3, 
+  "value": 1500
+}
+// Response
+{
+  "type":"channel_set",
+  "channel":5,
+  "value":1502,
+  "timestamp": 123456
+}
+// Error Responses
+{
+  "type":"error",
+  "message":"Missing channel or value field"
+}
+{
+  "type":"error",
+  "message":"Invalid channel number (1-16)"
+}
+{
+  "type":"error",
+  "message":"Invalid value range (0-2047)"
+}
+```
+
+**Set Muliple Channel Override**
+```json
+{
+  "command": "set_channels",
+  "channels": [
+    {"channel": 1, "value": 1000},
+    {"channel": 3, "value": 1500},
+    {"channel": 5, "value": 2000},
+    {"channel": 8, "value": 992}
+  ]
+}
+// Response
+{
+  "type":"channels_set",
+  "count":4,
+  "timestamp":123456
+}
+// Error Responses
+{
+  "type":"error",
+  "message":"Missing channels array"
+}
+{
+  "type":"error",
+  "message":"Missing channel or value in element 1"
+}
+{
+  "type":"error",
+  "message":"Invalid channel number 0"
+}
+{
+  "type":"error",
+  "message":"Invalid value 5000 for channel 2 (0-2047)"
+}
+```
+
+**Clear Channel Override**
+```json
+{
+  "command": "clear_channel", 
+  "channel": 3, 
+  "value": 1500
+}
+// Response
+{
+  "type":"channel_cleared",
+  "channel":3,
+  "timestamp": 12356
+}
+// Error Responses
+{
+  "type":"error",
+  "message":"Missing channel field"
+}
+{
+  "type":"error",
+  "message":"Invalid channel number (1-16)"
+}
+```
+
+**Clear All Channel Overrides**
+```json
+{
+  "command": "clear_all"
+}
+// Response
+{
+  "type":"all_cleared",
+  "timestamp": 12356
+}
+```
+
+**Request Channel Override Status**
+```json
+{
+  "command": "status"
+}
+// Response
+{
+  "type":"override_status",
+  "timestamp":
+    "overrides":
+    [
+      {"channel":3,"value":1500,"remaining_ms":525}
+    ]
+}
+```
+
+**Command Help**
+```json
+{
+  "command": "help"
+}
+// Response
+{
+  "type":"help",
+  "commands":
+  [
+    {"command":"set_channel","params":{"channel":"1-16","value":"0-2047"},"description":"Override a channel for 2 seconds"},
+    {"command":"set_channels","params":{"channels":[{"channel":"1-16","value":"0-2047"}]},"description":"Override multiple channels for 2 seconds"},
+    {"command":"clear_channel","params":{"channel":"1-16"},"description":"Clear override for specific channel"},
+    {"command":"clear_all","params":{},"description":"Clear all channel overrides"},
+    {"command":"status","params":{},"description":"Get current override status"},
+    {"command":"help","params":{},"description":"Show this help message"}
+  ]
+}
+```
 
 ### SBUS Retransmission
 
